@@ -1,3 +1,4 @@
+##fnlist:CMak Mermaid
 ##########################
 from math import exp
 from queue import Queue
@@ -95,6 +96,50 @@ class Magics():
                 d={key:{}}
             magics.update(d)
         return magics[key]
+    def getstartspace(self,line:str):
+        pattern = re.compile(r'\S')
+        spacechar=' '
+        spacecount=0
+        if len(line)>0 :
+            m = pattern.search(line)
+            if m!=None:
+                spacecount=m.start(0)
+            else:
+                spacecount=len(line)
+        if spacecount<1:return ''
+        return spacechar*spacecount
+    def slfn_include(self,key,magics,line):
+        # self.kobj._logln("find "+key)
+        li=line.find(key)
+        if li<0:return ''
+        filename=line[li+9:]
+        # self.kobj._logln("_include filename "+filename)
+        content=self.kobj.readcodefile(filename,spacecount=0)
+        startspace=self.getstartspace(line)
+        if len(startspace)>0:
+            startspace=startspace[0]*2+startspace
+        index=0
+        newcontent=''
+        contents=content.splitlines()
+        ncontents=len(contents)
+        for cline in contents:
+            if index==0:
+                newcontent+=cline+'\n'
+                index+=1
+            else:
+                if index==ncontents-1:
+                    newcontent+=startspace+cline
+                else:
+                    newcontent+=startspace+cline+'\n'
+        newcontent=line[:li]+newcontent
+        # qline=self.kobj.replacemany(line,'; ', ';')
+        # qline=self.kobj.replacemany(qline,' ;', ';')
+        # qline= qline[:len(qline)-1]
+        # li=qline.strip().split()
+        # if(len(li)>1):
+        #     magics['_include'] = li[1].strip()
+        # self.kobj._logln("newcontent---- \n"+newcontent)
+        return newcontent
     def slfn_package(self,key,magics,line):
         qline=self.kobj.replacemany(line,'; ', ';')
         qline=self.kobj.replacemany(qline,' ;', ';')
@@ -149,7 +194,6 @@ class Magics():
         else:
             magics['_st'][key] ='real'
         return ''
-    
     def kfn_replsetip(self,key,value,magics,line):
         return self.kfn_strlable(key,value,magics,line)
     def kfn_replchildpid(self,key,value,magics,line):
@@ -176,7 +220,6 @@ class Magics():
         return self.kfn_strlable(key,value,magics,line)
     def kfn_stdind(self,key,value,magics,line):
         return self.kfn_strlable(key,value,magics,line)
-        
     def kfn_srvmode(self,key,value,magics,line):
         return self.kfn_strlable(key,value,magics,line)
     def kfn_srvurl(self,key,value,magics,line):
@@ -201,7 +244,28 @@ class Magics():
         return self.kfn_listlable(key,value,magics,line)
     def kfn_smafterexec(self,key,value,magics,line):
         return self.kfn_listlable(key,value,magics,line)
-        
+    def kfn_prerunlist(self,key,value,magics,line):
+        try:
+            if len(value)>0:
+                for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
+                    magics['_st'][key] += [argument.strip('"')]
+        except Exception as e:
+            self.kobj._log(str(e),2)
+        return ''
+    def kfn_prerunforlist(self,key,value,magics,line):
+        try:
+            ##获取 list 值
+            list=self.kobj.get_magicsSvalue(magics,'prerunlist')
+            if len(list)<1:return ''
+            newval=value
+            magics['_st'][key]=[]
+            for li in list:
+                newval=value.replace('$runlist',li.strip()) 
+                if len(newval)>0:
+                    magics['_st'][key] += [newval[re.search(r'[^/]',newval).start():]]
+        except Exception as e:
+            self.kobj._logln(str(e),2)
+        return ''       
     def kfn_runlist(self,key,value,magics,line):
         try:
             if len(value)>0:
@@ -224,6 +288,8 @@ class Magics():
         except Exception as e:
             self.kobj._logln(str(e),2)
         return ''
+    def kfn_preassfile(self,key,value,magics,line):
+        return self.kfn_listlable(key,value,magics,line)
     def kfn_assfile(self,key,value,magics,line):
         return self.kfn_listlable(key,value,magics,line)
     def kfn_fileencode(self,key,value,magics,line):
@@ -234,7 +300,6 @@ class Magics():
         return self.kfn_strlable(key,value,magics,line)
     def kfn_cwd(self,key,value,magics,line):
         return self.kfn_strlable(key,value,magics,line)
-    
     def kfn_log(self,key,value,magics,line):
         magics['_st']['log'] = value.strip()
         self.kobj.set_loglevel(value.strip())
@@ -255,16 +320,14 @@ class Magics():
         for argument in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+', value):
             magics['_st']['args'] += [argument.strip('"')]
         return ''
-    
     def init_filter(self,magics):
+        self.addmagicsSLkey(magics,'_include:','1',self.slfn_include)
         self.addmagicsSLkey(magics,'package','0',self.slfn_package)
         self.addmagicsSLkey(magics,'public','0',self.slfn_public)
         self.addmagicsSkey(magics,'ldflags',self.kfn_ldflags)
         self.addmagicsSkey(magics,'cflags',self.kfn_cflags)
-        
         self.addmagicsSkey(magics,'switches',self.kfn_switches)
         self.addmagicsSkey(magics,'options',self.kfn_options)
-        
         self.addmagicsSkey(magics,'coptions',self.kfn_coptions)
         self.addmagicsSkey(magics,'joptions',self.kfn_joptions)
         self.addmagicsSkey(magics,'runmode',self.kfn_runmode)
@@ -282,14 +345,15 @@ class Magics():
         self.addmagicsSkey(magics,'sendrpcmsg',self.kfn_sendrpcmsg)
         self.addmagicsSkey(magics,'srmafterexec',self.kfn_srmafterexec)
         self.addmagicsSkey(magics,'smafterexec',self.kfn_smafterexec)
+        self.addmagicsSkey(magics,'prerunforlist',self.kfn_prerunforlist)
+        self.addmagicsSkey(magics,'prerunlist',self.kfn_prerunlist)
         self.addmagicsSkey(magics,'runforlist',self.kfn_runforlist)
         self.addmagicsSkey(magics,'runlist',self.kfn_runlist)
-        
+        self.addmagicsSkey(magics,'preassfile',self.kfn_preassfile)
         self.addmagicsSkey(magics,'assfile',self.kfn_assfile)
         self.addmagicsSkey(magics,'outputtype',self.kfn_outputtype)
         self.addmagicsSkey(magics,'fileencode',self.kfn_fileencode)
         self.addmagicsSkey(magics,'outencode',self.kfn_outencode)
-        
         self.addmagicsSkey(magics,'cwd',self.kfn_cwd)
         self.addmagicsSkey(magics,'log',self.kfn_log)
         self.addmagicsSkey(magics,'loadurl',self.kfn_loadurl)
@@ -312,11 +376,13 @@ class Magics():
                 },
                 '_sline':{
                     'package':'0',
-                    'public':'0'
+                    'public':'0',
+                    '_include:':'1'
                 },
                 '_slinef':{
                     'package':[],
-                    'public':[]
+                    'public':[],
+                    '_include:':[]
                 },
                 '_bt':{
                     'cleartest':'',
@@ -349,8 +415,11 @@ class Magics():
                     'sendrpcmsg':[],
                     'srmafterexec':[],
                     'smafterexec':[],
+                    'prerunforlist':'',
+                    'prerunlist':[],
                     'runforlist':'',
                     'runlist':[],
+                    'preassfile':[],
                     'assfile':[],
                     'pidcmd':[],
                     'term':[],
@@ -396,8 +465,11 @@ class Magics():
                     'sendrpcmsg':[],
                     'srmafterexec':[],
                     'smafterexec':[],
+                    'prerunforlist':[],
+                    'prerunlist':[],
                     'runforlist':[],
                     'runlist':[],
+                    'preassfile':[],
                     'assfile':[],
                     'pidcmd':[],
                     'term':[],
@@ -499,7 +571,6 @@ class Magics():
                     self.kobj._logln(pobj.getName(pobj)+"---"+str(e))
                 finally:pass
         return bcancel_exec,newcode
-        
     def filter(self, code):
         actualCode = ''
         newactualCode = ''
@@ -568,7 +639,6 @@ class Magics():
         for line in actualCode.splitlines():
             try:
                 if len(self.get_magicsBvalue(magics,'discleannotes'))>0 :continue
-                
                 if line=='':continue
                 line=self.kobj.cleandqm(line)
                 if line=='':continue
